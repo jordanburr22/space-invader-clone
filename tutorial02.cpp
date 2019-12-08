@@ -24,10 +24,18 @@ using namespace glm;
 #include <common/controls.hpp>
 #include <common/objloader.hpp>
 
+#define GAME_MAX_BULLETS 128
+
 float playerPos = 0.0;
-const float leftBound = -1.0f;
-const float rightBound = 1.0f;
-const float playerSpeed = 0.1;
+const float leftBound = -0.9f;
+const float rightBound = 0.9f;
+const float playerSpeed = 0.05;
+
+bool movingRight = false;
+bool movingLeft = false;
+
+size_t score = 0;
+bool fire_pressed = 0;
 
 GLuint colorbuffer;
 GLuint MatrixID;
@@ -45,22 +53,60 @@ void draw_square(glm::mat4, float, float, float);
 void draw_cube(glm::mat4, float, float, float);
 
 // -----------------------------------------------------------------
+// Position x,y in pixels from the bottom left corner of window
+struct Alien
+{
+    size_t x,y;
+    int type;
+};
+
+enum AlienType
+{
+    ALIEN_DEAD = 0,
+    ALIEN_TYPE_A = 1,
+    ALIEN_TYPE_B = 2,
+    ALIEN_TYPE_C = 3
+};
+
+// Position x,y in pixels from the bottom left corner of window
+// Number of lvies of the player
+struct Player
+{
+    size_t x,y;
+    size_t life;
+};
+
+// For the projectiles
+// sign of dir indicates the direction of travel
+struct Bullet
+{
+    size_t x, y;
+    int dir;
+};
+
+struct Game {
+    size_t width, height;
+    size_t num_aliens;
+    size_t num_bullets;
+    Alien* aliens;
+    Player player;
+    Bullet bullets[GAME_MAX_BULLETS];
+};
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 
-    if ((key == GLFW_KEY_RIGHT && action == GLFW_REPEAT) ||
-        (key == GLFW_KEY_RIGHT && action == GLFW_PRESS)) {//move right
-        if(playerPos <= rightBound)
-            playerPos += playerSpeed;
-    }
-    else if ((key == GLFW_KEY_LEFT && action == GLFW_REPEAT) ||
-             (key == GLFW_KEY_LEFT && action == GLFW_PRESS)) { //move left
-        if(playerPos >= leftBound)
-            playerPos -= playerSpeed;
-    } else if((key == GLFW_KEY_SPACE && action == GLFW_REPEAT) ||
-              (key == GLFW_KEY_SPACE && action == GLFW_PRESS)) {
-        draw_cube(glm::mat4(1.0f) * glm::scale(glm::vec3(0.1f, 0.1f, 0.1f)), 0.0f, 0.0f, 0.0f);
+    if (key == GLFW_KEY_RIGHT && action == GLFW_PRESS) { //move right
+        movingRight = true;
+    } else if (key == GLFW_KEY_RIGHT && action == GLFW_RELEASE) {
+        movingRight = false;
+    } else if ((key == GLFW_KEY_LEFT && action == GLFW_PRESS)){
+        movingLeft = true;
+    } else if ((key == GLFW_KEY_LEFT && action == GLFW_RELEASE)){
+        movingLeft = false;
+    } else if(key == GLFW_KEY_SPACE && action == GLFW_RELEASE) {
+        fire_pressed = true;
+        //draw_cube(glm::mat4(1.0f) * glm::scale(glm::vec3(0.1f, 0.1f, 0.1f)), 0.0f, 0.0f, 0.0f);
     }
     
 }
@@ -146,6 +192,13 @@ int main( void )
     glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
     glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(glm::vec2), &uvs[0], GL_STATIC_DRAW);
     
+    Game game;
+    game.num_aliens = 55;
+    game.num_bullets = 0;
+    game.aliens = new Alien[game.num_aliens];
+    
+    game.player.life = 3;
+    
 	do{
 
 		// Clear the screen
@@ -154,11 +207,19 @@ int main( void )
 		// Use our shader
 		glUseProgram(programID);
         
+        if(movingRight && playerPos <= rightBound) {
+            playerPos += playerSpeed;
+        }
+        
+        if(movingLeft && playerPos >= leftBound) {
+            playerPos -= playerSpeed;
+        }
+        
         glm::mat4 ProjectionMatrix = getProjectionMatrix();
         glm::mat4 ViewMatrix = getViewMatrix();
         glm::mat4 ModelMatrix = glm::mat4(1.0);
-        glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix * glm::translate(glm::vec3(playerPos, 0.0f, 0.0f)) *
-        glm::scale(glm::vec3(2.0f, 2.0f, 2.0f));
+        glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix * glm::translate(glm::vec3(playerPos, -0.8f, 0.0f)) *
+        glm::scale(glm::vec3(0.25f, 0.25f, 0.25f));
         
         // register all callbacks
         glfwSetKeyCallback(window, key_callback);
@@ -201,6 +262,66 @@ int main( void )
 		glDrawArrays(GL_TRIANGLES, 0, vertices.size()); // 3 indices starting at 0 -> 1 triangle
 
 		glDisableVertexAttribArray(0);
+        
+        
+        // Draw the aliens
+        for(size_t ai = 0; ai < game.num_aliens; ++ai)
+        {
+            // draw the alien only if death counter is bigger than 0
+            if(!game.aliens[ai].type == ALIEN_DEAD) continue;
+            
+            const Alien alien = game.aliens[ai];
+            
+            //draw the alien
+        }
+        
+        // Draw the bullets
+        for(size_t bi = 0; bi < game.num_bullets; ++bi)
+        {
+            // draw the bullet
+        }
+        
+        // Simulate bullets. Add dir, and remove projectiles that move out of game area
+        for(size_t bi = 0; bi < game.num_bullets;)
+        {
+            game.bullets[bi].y += game.bullets[bi].dir;
+            if(game.bullets[bi].y >= game.height ||
+               game.bullets[bi].y < 0)
+            {
+                game.bullets[bi] = game.bullets[game.num_bullets - 1];
+                --game.num_bullets;
+                continue;
+            }
+            
+            // Check if a bullet its an alien that is alive
+            for(size_t ai = 0; ai < game.num_aliens; ++ai)
+            {
+                const Alien alien = game.aliens[ai];
+                if(alien.type == ALIEN_DEAD) continue;
+                
+                // check if bullet overlaps an alien
+                bool overlap;
+                
+                // if collision, add to score and
+                if(overlap)
+                {
+                    // Based on the alien type, add score between 10 - 40 points
+                    score += 10 * (4 - game.aliens[ai].type);
+                    game.aliens[ai].type = ALIEN_DEAD;
+                    // NOTE: Hack to recenter death sprite
+                    game.bullets[bi] = game.bullets[game.num_bullets - 1];
+                    --game.num_bullets;
+                    continue;
+                }
+            }
+            ++bi;
+        }
+        
+        
+        if(fire_pressed) {
+            std::cout << "bang";
+        }
+        fire_pressed = false;
 
 		// Swap buffers
 		glfwSwapBuffers(window);
@@ -361,3 +482,4 @@ void draw_triangle(glm::mat4 Model, float r, float g, float b)
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
 }
+
