@@ -169,7 +169,8 @@ int main( void )
 	GLuint ModelMatrixID = glGetUniformLocation(programID, "M");
 
     // Load the texture
-    GLuint Texture = loadBMP_custom("brick.bmp");
+    GLuint Texture = loadBMP_custom("spaceshiphull.bmp");
+	GLuint Texture2 = loadBMP_custom("enemyhull.bmp");
 
     // Get a handle for our "myTextureSampler" uniform
     GLuint TextureID  = glGetUniformLocation(programID, "myTextureSampler");
@@ -288,8 +289,9 @@ int main( void )
 		glDrawArrays(GL_TRIANGLES, 0, vertices.size()); // 3 indices starting at 0 -> 1 triangle
 
 		glm::mat4 ModelMatrix2 = glm::mat4(1.0);
-		glm::mat4 MVP2 = ProjectionMatrix * ViewMatrix * ModelMatrix2 * glm::translate(glm::vec3(playerPos + 0.5f, -0.7f, 0.0f)) *
-			glm::scale(glm::vec3(0.3f, 0.3f, 0.3f));
+		//ModelMatrix2 *= glm::rotate(&ModelMatrix2, glm::radians(90.0f), glm::vec3(0.0, 1.0, 0.0));
+		glm::mat4 MVP2 = ProjectionMatrix * ViewMatrix * ModelMatrix2 * glm::translate(glm::vec3(0.0f, 0.5f, 0.0f)) *
+			glm::scale(glm::vec3(0.08f, 0.08f, 0.08f));
 
 		// Send our transformation to the currently bound shader,
 		// in the "MVP" uniform
@@ -297,7 +299,7 @@ int main( void )
 
 		// Bind our texture in Texture Unit 0
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, Texture);
+		glBindTexture(GL_TEXTURE_2D, Texture2);
 		// Set our "myTextureSampler" sampler to use Texture Unit 0
 		glUniform1i(TextureID, 0);
 
@@ -410,6 +412,8 @@ int main( void )
 	// Cleanup VBO
 	glDeleteBuffers(1, &vertexbuffer);
     glDeleteBuffers(1, &uvbuffer);
+	glDeleteBuffers(1, &enemyVertexbuffer);
+	glDeleteBuffers(1, &enemyUVbuffer);
 	glDeleteVertexArrays(1, &VertexArrayID);
 	glDeleteProgram(programID);
     glDeleteTextures(1, &Texture);
