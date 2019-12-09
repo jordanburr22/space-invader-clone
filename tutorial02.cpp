@@ -126,7 +126,7 @@ int main( void )
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// Open a window and create its OpenGL context
-	window = glfwCreateWindow( 1024, 768, "Tutorial 02 - Red triangle", NULL, NULL);
+	window = glfwCreateWindow( 1024, 768, "Space Invaders: Invade Space", NULL, NULL);
 	if( window == NULL ){
 		fprintf( stderr, "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n" );
 		getchar();
@@ -165,6 +165,8 @@ int main( void )
     
     // Get a handle for our "MVP" uniform
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
+	GLuint ViewMatrixID = glGetUniformLocation(programID, "V");
+	GLuint ModelMatrixID = glGetUniformLocation(programID, "M");
 
     // Load the texture
     GLuint Texture = loadBMP_custom("brick.bmp");
@@ -199,6 +201,9 @@ int main( void )
     
     // Initialize our little text library with the Holstein font
     initText2D( "Holstein.DDS" );
+
+	glUseProgram(programID);
+	GLuint LightID = glGetUniformLocation(programID, "LightPosition_worldspace");
     
 	do{
 
@@ -216,14 +221,19 @@ int main( void )
         // register all callbacks
         glfwSetKeyCallback(window, key_callback);
 
+		glm::mat4 ProjectionMatrix = getProjectionMatrix();
+		glm::mat4 ViewMatrix = getViewMatrix();
+
 		// Use our shader
 		glUseProgram(programID);
+
+		glm::vec3 lightPos = glm::vec3(0, 1.0f, 0);
+		glUniform3f(LightID, lightPos.x, lightPos.y, lightPos.z);
+		glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &ViewMatrix[0][0]); // This one doesn't change between objects, so this can be done once for all objects that use "programID"
         
-        glm::mat4 ProjectionMatrix = getProjectionMatrix();
-        glm::mat4 ViewMatrix = getViewMatrix();
         glm::mat4 ModelMatrix = glm::mat4(1.0);
-        glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix * glm::translate(glm::vec3(playerPos, -0.8f, 0.0f)) *
-        glm::scale(glm::vec3(0.1f, 0.1f, 0.1f));
+        glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix * glm::translate(glm::vec3(playerPos, -0.7f, 0.0f)) *
+        glm::scale(glm::vec3(0.3f, 0.3f, 0.3f));
         
         // Send our transformation to the currently bound shader,
         // in the "MVP" uniform
@@ -262,7 +272,49 @@ int main( void )
 		// Draw the triangle
 		glDrawArrays(GL_TRIANGLES, 0, vertices.size()); // 3 indices starting at 0 -> 1 triangle
 
+		glm::mat4 ModelMatrix2 = glm::mat4(1.0);
+		glm::mat4 MVP2 = ProjectionMatrix * ViewMatrix * ModelMatrix2 * glm::translate(glm::vec3(playerPos + 0.5f, -0.7f, 0.0f)) *
+			glm::scale(glm::vec3(0.3f, 0.3f, 0.3f));
+
+		// Send our transformation to the currently bound shader,
+		// in the "MVP" uniform
+		glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP2[0][0]);
+
+		// Bind our texture in Texture Unit 0
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, Texture);
+		// Set our "myTextureSampler" sampler to use Texture Unit 0
+		glUniform1i(TextureID, 0);
+
+		// 1rst attribute buffer : vertices
+		glEnableVertexAttribArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		glVertexAttribPointer(
+			0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
+			3,                  // size
+			GL_FLOAT,           // type
+			GL_FALSE,           // normalized?
+			0,                  // stride
+			(void*)0            // array buffer offset
+		);
+
+		// 2nd attribute buffer : UVs
+		glEnableVertexAttribArray(1);
+		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+		glVertexAttribPointer(
+			1,                                // attribute
+			2,                                // size
+			GL_FLOAT,                         // type
+			GL_FALSE,                         // normalized?
+			0,                                // stride
+			(void*)0                          // array buffer offset
+		);
+
+		// Draw the triangle
+		glDrawArrays(GL_TRIANGLES, 0, vertices.size()); // 3 indices starting at 0 -> 1 triangle
+
 		glDisableVertexAttribArray(0);
+		glDisableVertexAttribArray(1);
         
         
         // Draw the aliens
