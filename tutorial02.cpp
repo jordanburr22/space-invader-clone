@@ -180,6 +180,11 @@ int main( void )
     std::vector<glm::vec3> normals; // Won't be used at the moment.
     bool res = loadOBJ("rocket.obj", vertices, uvs, normals);
 
+	std::vector<glm::vec3> enemyVertices;
+	std::vector<glm::vec2> enemyUVs;
+	std::vector<glm::vec3> enemyNormals;
+	bool res2 = loadOBJ("enemy.obj", enemyVertices, enemyUVs, enemyNormals);
+
     // Load it into a VBO
     
     GLuint vertexbuffer;
@@ -191,6 +196,16 @@ int main( void )
     glGenBuffers(1, &uvbuffer);
     glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
     glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(glm::vec2), &uvs[0], GL_STATIC_DRAW);
+
+	GLuint enemyVertexbuffer;
+	glGenBuffers(1, &enemyVertexbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, enemyVertexbuffer);
+	glBufferData(GL_ARRAY_BUFFER, enemyVertices.size() * sizeof(glm::vec3), &enemyVertices[0], GL_STATIC_DRAW);
+
+	GLuint enemyUVbuffer;
+	glGenBuffers(1, &enemyUVbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, enemyUVbuffer);
+	glBufferData(GL_ARRAY_BUFFER, enemyUVs.size() * sizeof(glm::vec2), &enemyUVs[0], GL_STATIC_DRAW);
     
     Game game;
     game.num_aliens = 55;
@@ -288,7 +303,7 @@ int main( void )
 
 		// 1rst attribute buffer : vertices
 		glEnableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		glBindBuffer(GL_ARRAY_BUFFER, enemyVertexbuffer);
 		glVertexAttribPointer(
 			0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
 			3,                  // size
@@ -300,7 +315,7 @@ int main( void )
 
 		// 2nd attribute buffer : UVs
 		glEnableVertexAttribArray(1);
-		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+		glBindBuffer(GL_ARRAY_BUFFER, enemyUVbuffer);
 		glVertexAttribPointer(
 			1,                                // attribute
 			2,                                // size
@@ -311,7 +326,7 @@ int main( void )
 		);
 
 		// Draw the triangle
-		glDrawArrays(GL_TRIANGLES, 0, vertices.size()); // 3 indices starting at 0 -> 1 triangle
+		glDrawArrays(GL_TRIANGLES, 0, enemyVertices.size()); // 3 indices starting at 0 -> 1 triangle
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
