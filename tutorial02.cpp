@@ -21,6 +21,7 @@ using namespace glm;
 
 #include <common/shader.hpp>
 #include <common/texture.hpp>
+#include <common/text2D.hpp>
 #include <common/controls.hpp>
 #include <common/objloader.hpp>
 
@@ -29,12 +30,12 @@ using namespace glm;
 float playerPos = 0.0;
 const float leftBound = -0.9f;
 const float rightBound = 0.9f;
-const float playerSpeed = 0.05;
+const float playerSpeed = 0.03;
 
 bool movingRight = false;
 bool movingLeft = false;
 
-size_t score = 0;
+float score = 0;
 bool fire_pressed = 0;
 
 GLuint colorbuffer;
@@ -47,10 +48,7 @@ glm::mat4 View;
 
 // -----------------------------------------------------------------
 
-void draw_triangle(glm::mat4, float, float, float);
-void draw_right_triangle(glm::mat4, float, float, float);
-void draw_square(glm::mat4, float, float, float);
-void draw_cube(glm::mat4, float, float, float);
+void DrawCube( float , float , float , float  );
 
 // -----------------------------------------------------------------
 // Position x,y in pixels from the bottom left corner of window
@@ -72,7 +70,7 @@ enum AlienType
 // Number of lvies of the player
 struct Player
 {
-    size_t x,y;
+    float x,y;
     size_t life;
 };
 
@@ -80,7 +78,7 @@ struct Player
 // sign of dir indicates the direction of travel
 struct Bullet
 {
-    size_t x, y;
+    float x, y;
     int dir;
 };
 
@@ -150,7 +148,7 @@ int main( void )
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 
 	// Dark blue background
-	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     
     // Enable depth test
     glEnable(GL_DEPTH_TEST);
@@ -199,13 +197,13 @@ int main( void )
     
     game.player.life = 3;
     
+    // Initialize our little text library with the Holstein font
+    initText2D( "Holstein.DDS" );
+    
 	do{
 
 		// Clear the screen
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		// Use our shader
-		glUseProgram(programID);
         
         if(movingRight && playerPos <= rightBound) {
             playerPos += playerSpeed;
@@ -215,14 +213,17 @@ int main( void )
             playerPos -= playerSpeed;
         }
         
+        // register all callbacks
+        glfwSetKeyCallback(window, key_callback);
+
+		// Use our shader
+		glUseProgram(programID);
+        
         glm::mat4 ProjectionMatrix = getProjectionMatrix();
         glm::mat4 ViewMatrix = getViewMatrix();
         glm::mat4 ModelMatrix = glm::mat4(1.0);
         glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix * glm::translate(glm::vec3(playerPos, -0.8f, 0.0f)) *
-        glm::scale(glm::vec3(0.25f, 0.25f, 0.25f));
-        
-        // register all callbacks
-        glfwSetKeyCallback(window, key_callback);
+        glm::scale(glm::vec3(0.1f, 0.1f, 0.1f));
         
         // Send our transformation to the currently bound shader,
         // in the "MVP" uniform
@@ -265,7 +266,7 @@ int main( void )
         
         
         // Draw the aliens
-        for(size_t ai = 0; ai < game.num_aliens; ++ai)
+        for(int ai = 0; ai < game.num_aliens; ++ai)
         {
             // draw the alien only if death counter is bigger than 0
             if(!game.aliens[ai].type == ALIEN_DEAD) continue;
@@ -275,14 +276,16 @@ int main( void )
             //draw the alien
         }
         
+        
         // Draw the bullets
-        for(size_t bi = 0; bi < game.num_bullets; ++bi)
+        for(int bi = 0; bi < game.num_bullets; ++bi)
         {
             // draw the bullet
+            DrawCube(playerPos, 0.0f, game.bullets[bi].y + 0.5, 0.1f);
         }
         
         // Simulate bullets. Add dir, and remove projectiles that move out of game area
-        for(size_t bi = 0; bi < game.num_bullets;)
+        for(int bi = 0; bi < game.num_bullets;)
         {
             game.bullets[bi].y += game.bullets[bi].dir;
             if(game.bullets[bi].y >= game.height ||
@@ -294,7 +297,7 @@ int main( void )
             }
             
             // Check if a bullet its an alien that is alive
-            for(size_t ai = 0; ai < game.num_aliens; ++ai)
+            for(int ai = 0; ai < game.num_aliens; ++ai)
             {
                 const Alien alien = game.aliens[ai];
                 if(alien.type == ALIEN_DEAD) continue;
@@ -322,6 +325,12 @@ int main( void )
             std::cout << "bang";
         }
         fire_pressed = false;
+        
+        char text[256];
+        sprintf(text,"Score: %.0f", score );
+        printText2D(text, 10, 500, 40);
+        score = glfwGetTime();
+        
 
 		// Swap buffers
 		glfwSwapBuffers(window);
@@ -338,6 +347,9 @@ int main( void )
 	glDeleteProgram(programID);
     glDeleteTextures(1, &Texture);
 
+    // Delete the text's VBO, the shader and the texture
+    cleanupText2D();
+    
 	// Close OpenGL window and terminate GLFW
 	glfwTerminate();
 
@@ -346,105 +358,93 @@ int main( void )
 
 //----------------------------------------------------------------------------
 
-
-// 2 x 2 x 2 cube centered on (0, 0, 0)
-
-
-void draw_cube(glm::mat4 Model, float r, float g, float b)
+void DrawCube( float centerPosX, float centerPosY, float centerPosZ, float edgeLength )
 {
-    // +Z, -Z
+    float halfSideLength = edgeLength * 0.5f;
     
-    draw_square(Model * glm::translate(glm::vec3(0.0f, 0.0f, +1.0f)), r, g, b);
-    draw_square(Model * glm::translate(glm::vec3(0.0f, 0.0f, -1.0f)), 0.5*r, 0.5*g, 0.5*b);
+    float vertices[] =
+    {
+        // front face
+        centerPosX - halfSideLength, centerPosY + halfSideLength, centerPosZ + halfSideLength, // top left
+        centerPosX + halfSideLength, centerPosY + halfSideLength, centerPosZ + halfSideLength, // top right
+        centerPosX + halfSideLength, centerPosY - halfSideLength, centerPosZ + halfSideLength, // bottom right
+        centerPosX - halfSideLength, centerPosY - halfSideLength, centerPosZ + halfSideLength, // bottom left
+        
+        // back face
+        centerPosX - halfSideLength, centerPosY + halfSideLength, centerPosZ - halfSideLength, // top left
+        centerPosX + halfSideLength, centerPosY + halfSideLength, centerPosZ - halfSideLength, // top right
+        centerPosX + halfSideLength, centerPosY - halfSideLength, centerPosZ - halfSideLength, // bottom right
+        centerPosX - halfSideLength, centerPosY - halfSideLength, centerPosZ - halfSideLength, // bottom left
+        
+        // left face
+        centerPosX - halfSideLength, centerPosY + halfSideLength, centerPosZ + halfSideLength, // top left
+        centerPosX - halfSideLength, centerPosY + halfSideLength, centerPosZ - halfSideLength, // top right
+        centerPosX - halfSideLength, centerPosY - halfSideLength, centerPosZ - halfSideLength, // bottom right
+        centerPosX - halfSideLength, centerPosY - halfSideLength, centerPosZ + halfSideLength, // bottom left
+        
+        // right face
+        centerPosX + halfSideLength, centerPosY + halfSideLength, centerPosZ + halfSideLength, // top left
+        centerPosX + halfSideLength, centerPosY + halfSideLength, centerPosZ - halfSideLength, // top right
+        centerPosX + halfSideLength, centerPosY - halfSideLength, centerPosZ - halfSideLength, // bottom right
+        centerPosX + halfSideLength, centerPosY - halfSideLength, centerPosZ + halfSideLength, // bottom left
+        
+        // top face
+        centerPosX - halfSideLength, centerPosY + halfSideLength, centerPosZ + halfSideLength, // top left
+        centerPosX - halfSideLength, centerPosY + halfSideLength, centerPosZ - halfSideLength, // top right
+        centerPosX + halfSideLength, centerPosY + halfSideLength, centerPosZ - halfSideLength, // bottom right
+        centerPosX + halfSideLength, centerPosY + halfSideLength, centerPosZ + halfSideLength, // bottom left
+        
+        // top face
+        centerPosX - halfSideLength, centerPosY - halfSideLength, centerPosZ + halfSideLength, // top left
+        centerPosX - halfSideLength, centerPosY - halfSideLength, centerPosZ - halfSideLength, // top right
+        centerPosX + halfSideLength, centerPosY - halfSideLength, centerPosZ - halfSideLength, // bottom right
+        centerPosX + halfSideLength, centerPosY - halfSideLength, centerPosZ + halfSideLength  // bottom left
+    };
     
+    glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+    //glColor3f( colour[0], colour[1], colour[2] );
+    glEnableClientState( GL_VERTEX_ARRAY );
+    glVertexPointer( 3, GL_FLOAT, 0, vertices );
     
-    // +X, -X
+    glDrawArrays( GL_QUADS, 0, 24 );
     
-    
-    glm::mat4 RY = glm::rotate((float) (0.5*M_PI),
-                               glm::vec3(        0.0f,
-                                         1.0f,
-                                         0.0f));
-    
-    
-    draw_square(Model * glm::translate(glm::vec3(+1.0f, 0.0f, 0.0f)) * RY, r, g -.25, b);
-    draw_square(Model * glm::translate(glm::vec3(-1.0f, 0.0f, 0.0f)) * RY, 0.5*g, 0.5*b, 0.5*r);
-    
-    
-    // +Y, -Y
-    
-    
-    glm::mat4 RX = glm::rotate((float) (0.5*M_PI),
-                               glm::vec3(        1.0f,
-                                         0.0f,
-                                         0.0f));
-    
-    
-    draw_square(Model * glm::translate(glm::vec3(0.0f, +1.0f, 0.0f)) * RX, r, g, b-.25);
-    draw_square(Model * glm::translate(glm::vec3(0.0f, -1.0f, 0.0f)) * RX, 0.5*b, 0.5*r, 0.5*g);
-    
-    
+    glDisableClientState( GL_VERTEX_ARRAY );
 }
 
-
-//----------------------------------------------------------------------------
-
-
-// 2 x 2 square centered on (0, 0)
-
-
-void draw_square(glm::mat4 Model, float r, float g, float b)
-{
-    glm::mat4 M = glm::scale(glm::vec3(-1.0f, -1.0f, 0.0f));
+void draw_bullet() {
+    // Read our .obj file
+    std::vector<glm::vec3> vertices;
+    std::vector<glm::vec2> uvs;
+    std::vector<glm::vec3> normals; // Won't be used at the moment.
+    bool res = loadOBJ("cube.obj", vertices, uvs, normals);
     
+    // Load it into a VBO
     
-    //  draw_right_triangle(Model * M, 1.0-r, 1.0-g, 1.0-b);
-    draw_right_triangle(Model * M, r, g, b);
-    draw_right_triangle(Model, r, g, b);
-}
-
-
-//----------------------------------------------------------------------------
-
-
-// with shear, bottom-left at (-1, -1), bottom-right at (1, -1),
-// top-right at (1, 1)
-
-
-void draw_right_triangle(glm::mat4 Model, float r, float g, float b)
-{
-    glm::mat4 S = glm::shearX3D (glm::mat4(1.0f), 0.5f, 0.0f);
-    glm::mat4 T = glm::translate(glm::vec3(-1.0f, 1.0f, 0.0f));
+    GLuint vertexbuffer;
+    glGenBuffers(1, &vertexbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
     
-    draw_triangle(Model * glm::inverse(T) * S * T, r, g, b);
-}
-
-
-//----------------------------------------------------------------------------
-
-
-// bottom-left at (-1, -1), bottom-right at (1, -1),
-// top at (0, 1)
-
-
-// Draw triangle with particular modeling transformation and color (r, g, b) (in range [0, 1])
-// Refers to globals in section above (but does not change them)
-
-
-void draw_triangle(glm::mat4 Model, float r, float g, float b)
-{
-    // Our ModelViewProjection : multiplication of our 3 matrices
-    glm::mat4 MVP = getProjectionMatrix() * getViewMatrix() * Model;
+    GLuint uvbuffer;
+    glGenBuffers(1, &uvbuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+    glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(glm::vec2), &uvs[0], GL_STATIC_DRAW);
     
+    glm::mat4 ProjectionMatrix = getProjectionMatrix();
+    glm::mat4 ViewMatrix = getViewMatrix();
+    glm::mat4 ModelMatrix = glm::mat4(1.0);
+    glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix * glm::translate(glm::vec3(playerPos, -0.8f, 0.0f)) *
+    glm::scale(glm::vec3(0.1f, 0.1f, 0.1f));
     
-    // make this transform available to shaders
+    // Send our transformation to the currently bound shader,
+    // in the "MVP" uniform
     glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
     
-    
-    // 1st attribute buffer : vertices
+    // 1rst attribute buffer : vertices
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-    glVertexAttribPointer(0,                  // attribute. 0 to match the layout in the shader.
+    glVertexAttribPointer(
+                          0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
                           3,                  // size
                           GL_FLOAT,           // type
                           GL_FALSE,           // normalized?
@@ -452,34 +452,20 @@ void draw_triangle(glm::mat4 Model, float r, float g, float b)
                           (void*)0            // array buffer offset
                           );
     
-    // all vertices same color
-    
-    
-    GLfloat g_color_buffer_data[] = {
-        r, g, b,
-        r, g, b,
-        r, g, b,
-    };
-    
-    glBindBuffer(GL_ARRAY_BUFFER, colorbuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(g_color_buffer_data), g_color_buffer_data, GL_STATIC_DRAW);
-    
-    // 2nd attribute buffer : colors
+    // 2nd attribute buffer : UVs
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, colorbuffer);
-    glVertexAttribPointer(1,                                // attribute. 1 to match the layout in the shader.
-                          3,                                // size
+    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+    glVertexAttribPointer(
+                          1,                                // attribute
+                          2,                                // size
                           GL_FLOAT,                         // type
                           GL_FALSE,                         // normalized?
                           0,                                // stride
                           (void*)0                          // array buffer offset
                           );
     
-    
-    // Draw the triangle !
-    glDrawArrays(GL_TRIANGLES, 0, 3); // 3 indices starting at 0 -> 1 triangle
+    // Draw the triangle
+    glDrawArrays(GL_TRIANGLES, 0, vertices.size()); // 3 indices starting at 0 -> 1 triangle
     
     glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
 }
-
